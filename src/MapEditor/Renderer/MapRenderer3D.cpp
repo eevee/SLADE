@@ -81,8 +81,7 @@ MapRenderer3D::MapRenderer3D(SLADEMap* map)
 	this->fog = true;
 	this->fullbright = false;
 	this->gravity = 0.5;
-	this->vbo_ceilings = 0;
-	this->vbo_floors = 0;
+	this->vbo_flats = 0;
 	this->vbo_walls = 0;
 	this->skytex1 = "SKY1";
 	this->quads = NULL;
@@ -110,8 +109,7 @@ MapRenderer3D::MapRenderer3D(SLADEMap* map)
 MapRenderer3D::~MapRenderer3D()
 {
 	if (quads)				delete quads;
-	if (vbo_ceilings > 0)	glDeleteBuffers(1, &vbo_ceilings);
-	if (vbo_floors > 0)		glDeleteBuffers(1, &vbo_floors);
+	if (vbo_flats > 0)		glDeleteBuffers(1, &vbo_flats);
 	if (vbo_walls > 0)		glDeleteBuffers(1, &vbo_walls);
 }
 
@@ -151,11 +149,10 @@ void MapRenderer3D::refresh()
 	flats.clear();
 
 	// Clear VBOs
-	if (vbo_floors != 0)
+	if (vbo_flats != 0)
 	{
-		glDeleteBuffers(1, &vbo_floors);
-		glDeleteBuffers(1, &vbo_ceilings);
-		vbo_floors = vbo_ceilings = 0;
+		glDeleteBuffers(1, &vbo_flats);
+		vbo_flats = 0;
 	}
 
 	sector_flats.clear();
@@ -517,6 +514,18 @@ void MapRenderer3D::renderMap()
 	// Init
 	tex_last = NULL;
 
+	// Create flats array if needed
+	if (sector_flats.size() != map->nSectors())
+		sector_flats.resize(map->nSectors());
+
+	// Create lines array if empty
+	if (lines.size() != map->nLines())
+		lines.resize(map->nLines());
+
+	// Create things array if empty
+	if (things.size() != map->nThings())
+		things.resize(map->nThings());
+
 	// Init VBO stuff
 	if (OpenGL::vboSupport())
 	{
@@ -534,27 +543,12 @@ void MapRenderer3D::renderMap()
 		}
 
 		// Create VBO if necessary
-		if (!vbo_updated && vbo_floors == 0)
+		if (!vbo_updated && vbo_flats == 0)
 			updateFlatsVBO();
 
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 	}
-
-	// Create flat arrays if needed
-	if (sector_flats.size() != map->nSectors())
-	{
-		sector_flats.resize(map->nSectors());
-		// TODO resize all to at least 2?
-	}
-
-	// Create lines array if empty
-	if (lines.size() != map->nLines())
-		lines.resize(map->nLines());
-
-	// Create things array if empty
-	if (things.size() != map->nThings())
-		things.resize(map->nThings());
 
 	// Quick distance vis check
 	sf::Clock clock;
@@ -828,12 +822,13 @@ void MapRenderer3D::updateFlatTexCoords(unsigned index, bool floor)
 /* MapRenderer3D::updateSector
  * Updates cached rendering data for sector [index]
  *******************************************************************/
-void MapRenderer3D::updateSector(unsigned index)
+void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 {
 	// Check index
 	if (index >= map->nSectors())
 		return;
 
+	// TODO this might be too extreme -- only really need to resize and allow the assignments below
 	sector_flats[index].clear();
 	sector_flats[index].resize(2);
 
@@ -847,18 +842,9 @@ void MapRenderer3D::updateSector(unsigned index)
 	floor_flat.light = sector->getLight(1);
 	floor_flat.flags = 0;
 	floor_flat.plane = sector->getFloorPlane();
+	floor_flat.base_alpha = 1.0f;
 	if (S_CMPNOCASE(sector->getFloorTex(), theGameConfiguration->skyFlat()))
 		floor_flat.flags |= SKY;
-
-	// Update floor VBO
-	if (OpenGL::vboSupport())
-	{
-		updateFlatTexCoords(index, true);
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_floors);
-		Polygon2D::setupVBOPointers();
-		sector->getPolygon()->setZ(floor_flat.plane);
-		sector->getPolygon()->updateVBOData();
-	}
 
 	// Update ceiling
 	flat_3d_t& ceiling_flat = sector_flats[index][1];
@@ -869,27 +855,82 @@ void MapRenderer3D::updateSector(unsigned index)
 	ceiling_flat.light = sector->getLight(2);
 	ceiling_flat.flags = CEIL;
 	ceiling_flat.plane = sector->getCeilingPlane();
+	ceiling_flat.base_alpha = 1.0f;
 	if (S_CMPNOCASE(sector->getCeilingTex(), theGameConfiguration->skyFlat()))
 		ceiling_flat.flags |= SKY;
 
-	// Update ceiling VBO
-	if (OpenGL::vboSupport())
+	// Deal with 3D floors
+	for (unsigned a = 0; a < sector->extra_floors.size(); a++)
 	{
-		updateFlatTexCoords(index, false);
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_ceilings);
-		Polygon2D::setupVBOPointers();
-		sector->getPolygon()->setZ(ceiling_flat.plane);
-		sector->getPolygon()->updateVBOData();
-	}
+		extra_floor_t& extra = sector->extra_floors[a];
+		MapSector* control_sector = map->getSector(extra.control_sector_index);
 
-	// Finish up
-	floor_flat.updated_time = theApp->runTimer();
-	ceiling_flat.updated_time = theApp->runTimer();
-	if (OpenGL::vboSupport())
+		// TODO which of these is really a floor and which is really a ceiling?
+		// TODO BOTH sides of the inner flat are drawn sometimes!
+		flat_3d_t xf_floor;
+		xf_floor.sector = sector;
+		xf_floor.texture = theMapEditor->textureManager().getFlat(control_sector->getFloorTex(), theGameConfiguration->mixTexFlats());
+		// TODO wrong.  maybe?  does it inherit from parent?
+		xf_floor.colour = sector->getColour(1);
+		// TODO again, maybe?
+		xf_floor.fogcolour = sector->getFogColour();
+		// TODO oughta support screen blends too!!
+		// TODO this probably comes from the control sector, unless there's a flag, yadda...
+		xf_floor.light = sector->getLight(0);
+		xf_floor.flags = CEIL;
+		xf_floor.plane = control_sector->getFloorPlane();
+		xf_floor.base_alpha = extra.alpha;
+		sector_flats[index].push_back(xf_floor);
+
+		flat_3d_t xf_ceiling;
+		xf_ceiling.sector = sector;
+		xf_ceiling.texture = theMapEditor->textureManager().getFlat(control_sector->getCeilingTex(), theGameConfiguration->mixTexFlats());
+		xf_ceiling.colour = sector->getColour(1);
+		// TODO again, maybe?
+		xf_ceiling.fogcolour = sector->getFogColour();
+		// TODO this probably comes from the control sector, unless there's a flag, yadda...
+		xf_ceiling.light = sector->getLight(0);
+		xf_ceiling.flags = 0;
+		xf_ceiling.plane = control_sector->getCeilingPlane();
+		xf_ceiling.base_alpha = extra.alpha;
+		sector_flats[index].push_back(xf_ceiling);
+	}
+	if (sector_flats[index].size() > 2)
+		LOG_MESSAGE(2, "sector %d has %lu flats", index, sector_flats[index].size());
+
+	// Update VBOs
+	if (OpenGL::vboSupport() && update_vbo)
 	{
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_flats);
+
+		for (unsigned a = 0; a < sector_flats[index].size(); a++)
+		{
+			updateFlatTexCoords(index, sector_flats[index][a].flags & CEIL);
+			Polygon2D::setupVBOPointers();
+			sector->getPolygon()->setZ(sector_flats[index][a].plane);
+			sector->getPolygon()->updateVBOData(sector_flats[index][a].vbo_start);
+		}
+
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		sector->getPolygon()->setZ(0);
 	}
+
+	// Finish up
+	for (unsigned a = 0; a < sector_flats[index].size(); a++)
+		sector_flats[index][a].updated_time = theApp->runTimer();
+}
+
+/* MapRenderer3D::isSectorStale
+ * Returns whether the sector at [index] needs to be updated.
+ *******************************************************************/
+bool MapRenderer3D::isSectorStale(unsigned index)
+{
+	MapSector* sector = map->getSector(index);
+	if (!sector) return false;
+
+	return (!sector_flats[index].size() ||
+		sector_flats[index][0].updated_time < sector->modifiedTime() ||
+		sector_flats[index][0].updated_time < sector->geometryUpdatedTime());
 }
 
 /* MapRenderer3D::renderFlat
@@ -902,7 +943,7 @@ void MapRenderer3D::renderFlat(flat_3d_t* flat)
 		return;
 
 	// Setup special rendering options
-	float alpha = flat->alpha;
+	float alpha = flat->alpha * flat->base_alpha;
 	if (flat->flags & SKY && render_3d_sky)
 	{
 		alpha = 0;
@@ -924,7 +965,7 @@ void MapRenderer3D::renderFlat(flat_3d_t* flat)
 			if (flat_last != 2)
 			{
 				glCullFace(GL_BACK);
-				glBindBuffer(GL_ARRAY_BUFFER, vbo_ceilings);
+				glBindBuffer(GL_ARRAY_BUFFER, vbo_flats);
 				Polygon2D::setupVBOPointers();
 				flat_last = 2;
 			}
@@ -934,14 +975,14 @@ void MapRenderer3D::renderFlat(flat_3d_t* flat)
 			if (flat_last != 1)
 			{
 				glCullFace(GL_FRONT);
-				glBindBuffer(GL_ARRAY_BUFFER, vbo_floors);
+				glBindBuffer(GL_ARRAY_BUFFER, vbo_flats);
 				Polygon2D::setupVBOPointers();
 				flat_last = 1;
 			}
 		}
 
 		// Render
-		flat->sector->getPolygon()->renderVBO(false);
+		flat->sector->getPolygon()->renderVBO(flat->vbo_start, false);
 	}
 	else
 	{
@@ -1268,6 +1309,8 @@ void MapRenderer3D::updateLine(unsigned index)
 	}
 
 	// --- Two-sided line ---
+
+	// TODO middle parts may show 3D floors!
 
 	// Get second side info
 	int floor2 = line->backSector()->getFloorHeight();
@@ -2272,24 +2315,26 @@ void MapRenderer3D::updateFlatsVBO()
 		return;
 
 	// Create VBOs if needed
-	if (vbo_floors == 0)
-	{
-		glGenBuffers(1, &vbo_floors);
-		glGenBuffers(1, &vbo_ceilings);
-	}
+	if (vbo_flats == 0)
+		glGenBuffers(1, &vbo_flats);
 
 	// Get total size needed
 	unsigned totalsize = 0;
 	for (unsigned a = 0; a < map->nSectors(); a++)
 	{
+		// Slight chicken and egg problem: updateSector() has to run first to
+		// create a flat_3d_t for each 3D floor, but it tries to update VBOs,
+		// which may not exist the first time this function runs.
+		// So, skip the VBOs specifically for this call.
+		if (isSectorStale(a))
+			updateSector(a, false);
+
 		Polygon2D* poly = map->getSector(a)->getPolygon();
-		totalsize += poly->vboDataSize();
+		totalsize += poly->vboDataSize() * sector_flats[a].size() * 2;
 	}
 
-	// --- Floors ---
-
 	// Allocate buffer data
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_floors);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_flats);
 	Polygon2D::setupVBOPointers();
 	glBufferData(GL_ARRAY_BUFFER, totalsize, NULL, GL_STATIC_DRAW);
 
@@ -2297,38 +2342,27 @@ void MapRenderer3D::updateFlatsVBO()
 	unsigned offset = 0;
 	unsigned index = 0;
 	int height = 0;
-	for (unsigned a = 0; a < map->nSectors(); a++)
+	for (unsigned a = 0; a < sector_flats.size(); a++)
 	{
-		// Set polygon z height
-		Polygon2D* poly = map->getSector(a)->getPolygon();
-		height = map->getSector(a)->intProperty("heightfloor");
-		poly->setZ(height);
+		MapSector* sector = sector_flats[a][0].sector;
+		Polygon2D* poly = sector->getPolygon();
 
-		// Write to VBO
-		offset = poly->writeToVBO(offset, index);
-		index += poly->totalVertices();
-	}
+		// TODO i realize we'll have to do this if any 3d floors are /added/, too
+		unsigned start = index;
+		unsigned orig_offset = offset;
+		for (unsigned b = 0; b < sector_flats[a].size(); b++)
+		{
+			// Write flat to VBO
+			// TODO this is a stupid hack
+			sector_flats[a][b].vbo_start = index - start;
+			poly->setZ(sector_flats[a][b].plane);
+			offset = poly->writeToVBO(offset, index);
+			index += poly->totalVertices();
+		}
 
-	// --- Ceilings ---
-
-	// Allocate buffer data
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_ceilings);
-	Polygon2D::setupVBOPointers();
-	glBufferData(GL_ARRAY_BUFFER, totalsize, NULL, GL_STATIC_DRAW);
-
-	// Write polygon data to VBO
-	offset = 0;
-	index = 0;
-	for (unsigned a = 0; a < map->nSectors(); a++)
-	{
-		// Set polygon z height
-		Polygon2D* poly = map->getSector(a)->getPolygon();
-		height = map->getSector(a)->intProperty("heightceiling");
-		poly->setZ(height);
-
-		// Write to VBO
-		offset = poly->writeToVBO(offset, index);
-		index += poly->totalVertices();
+		// TODO this is extra super bad but basically we have to make sure the poly uses the offset for the /first/ sector flat here...  ugh
+		poly->setZ(sector_flats[a][0].plane);
+		poly->writeToVBO(orig_offset, start);
 
 		// Reset polygon z
 		poly->setZ(0.0f);
@@ -2520,11 +2554,11 @@ void MapRenderer3D::checkVisibleQuads()
 void MapRenderer3D::checkVisibleFlats()
 {
 	// Create flats array if empty
+	flats.clear();
 	flats.reserve(map->nSectors() * 2);
 
 	// Go through sectors
 	MapSector* sector;
-	n_flats = 0;
 	float alpha;
 	fpoint2_t cam = cam_position.get2d();
 	for (unsigned a = 0; a < map->nSectors(); a++)
@@ -2550,9 +2584,7 @@ void MapRenderer3D::checkVisibleFlats()
 		}
 
 		// Update sector info if needed
-		if (!sector_flats[a].size() ||
-			sector_flats[a][0].updated_time < sector->modifiedTime() ||
-			sector_flats[a][0].updated_time < sector->geometryUpdatedTime())
+		if (isSectorStale(a))
 			updateSector(a);
 
 		// Set distance fade alpha
@@ -2560,26 +2592,18 @@ void MapRenderer3D::checkVisibleFlats()
 			alpha = calcDistFade(dist_sectors[a], render_max_dist);
 		else
 			alpha = 1.0f;
+
+		// TODO this used to add all the floors, then all the ceilings, which would reduce the number of GL state calls -- can probably fix that
+
+		// Add flats
 		for (unsigned b = 0; b < sector_flats[a].size(); b++)
+		{
 			sector_flats[a][b].alpha = alpha;
-
-		// Add floor flat
-		flats.reserve(n_flats + 1);
-		flats[n_flats] = &(sector_flats[a][0]);
-		n_flats++;
+			flats.push_back(&sector_flats[a][b]);
+		}
 	}
-	for (unsigned a = 0; a < map->nSectors(); a++)
-	{
-		// Skip if invisible
-		if (dist_sectors[a] < 0)
-			continue;
 
-		// Add ceiling flat
-		flats.reserve(n_flats + 1);
-		flats[n_flats] = &(sector_flats[a][1]);
-		n_flats++;
-	}
-	// TODO 3dfloor -- why the separate loop there...?
+	n_flats = flats.size();
 }
 
 /* MapRenderer3D::determineHilight
@@ -2670,7 +2694,6 @@ selection_3d_t MapRenderer3D::determineHilight()
 			continue;
 
 		// Check distance to planes
-		// TODO 3dfloor needs to check in z order spreading outwards, i think?
 		for (unsigned b = 0; b < sector_flats[a].size(); b++)
 		{
 			flat_3d_t& flat = sector_flats[a][b];
@@ -2690,6 +2713,7 @@ selection_3d_t MapRenderer3D::determineHilight()
 			if (!map->getSector(a)->isWithin((cam_position + cam_dir3d * dist).get2d()))
 				continue;
 
+			// TODO not good enough; needs to indicate which 3d floor as well
 			current.index = a;
 			min_dist = dist;
 			if (sector_flats[a][b].flags & CEIL)

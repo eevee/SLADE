@@ -205,11 +205,11 @@ unsigned Polygon2D::writeToVBO(unsigned offset, unsigned index)
 	return ofs;
 }
 
-void Polygon2D::updateVBOData()
+void Polygon2D::updateVBOData(unsigned start)
 {
 	// Go through subpolys
 	for (unsigned a = 0; a < subpolys.size(); a++)
-		glBufferSubData(GL_ARRAY_BUFFER, subpolys[a]->vbo_offset, subpolys[a]->n_vertices*20, subpolys[a]->vertices);
+		glBufferSubData(GL_ARRAY_BUFFER, subpolys[a]->vbo_offset + start*20, subpolys[a]->n_vertices*20, subpolys[a]->vertices);
 
 	// Update variables
 	vbo_update = 0;
@@ -247,12 +247,12 @@ void Polygon2D::renderWireframe()
 	}
 }
 
-void Polygon2D::renderVBO(bool colour)
+void Polygon2D::renderVBO(unsigned start, bool colour)
 {
 	// Render
 	//glColor4f(this->colour[0], this->colour[1], this->colour[2], this->colour[3]);
 	for (unsigned a = 0; a < subpolys.size(); a++)
-		glDrawArrays(GL_TRIANGLE_FAN, subpolys[a]->vbo_index, subpolys[a]->n_vertices);
+		glDrawArrays(GL_TRIANGLE_FAN, subpolys[a]->vbo_index + start, subpolys[a]->n_vertices);
 }
 
 void Polygon2D::renderWireframeVBO(bool colour)

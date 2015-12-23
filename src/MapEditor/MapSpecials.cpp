@@ -169,12 +169,12 @@ void MapSpecials::updateTaggedSectors(SLADEMap* map)
  *******************************************************************/
 void MapSpecials::processZDoomMapSpecials(SLADEMap* map)
 {
+	// All slope specials, which must be done in a particular order
+	processZDoomSlopes(map);
+
 	// Line specials
 	for (unsigned a = 0; a < map->nLines(); a++)
 		processZDoomLineSpecial(map->getLine(a));
-
-	// All slope specials, which must be done in a particular order
-	processZDoomSlopes(map);
 }
 
 /* MapSpecials::processZDoomLineSpecial
@@ -195,8 +195,40 @@ void MapSpecials::processZDoomLineSpecial(MapLine* line)
 	for (unsigned arg = 0; arg < 5; arg++)
 		args[arg] = line->intProperty(S_FMT("arg%d", arg));
 
+	// --- Sector_Set3dFloor
+	if (special == 160)
+	{
+		MapSector* control_sector = line->frontSector();
+		if (!control_sector) return;
+
+		int sector_tag = args[0];
+		int type_flags = args[1];
+		int flags = args[2];
+		int alpha = args[3];
+
+		float falpha = float(alpha) / 255.0;
+
+		extra_floor_t extra_floor;
+		// TODO only gzdoom supports slopes here.
+		// TODO this should probably happen live instead of being copied, if
+		// we're moving towards purely live updates here
+		extra_floor.floor_plane = control_sector->getFloorPlane();
+		extra_floor.ceiling_plane = control_sector->getCeilingPlane();
+
+		extra_floor.control_sector_index = control_sector->getIndex();
+		extra_floor.floor_type = type_flags & 0x3;
+
+		extra_floor.alpha = falpha;
+
+		vector<MapSector*> sectors;
+		map->getSectorsByTag(sector_tag, sectors);
+		for (unsigned a = 0; a < sectors.size(); a++)
+			sectors[a]->extra_floors.push_back(extra_floor);
+		LOG_MESSAGE(4, "adding a 3d floor controlled by sector %d to %lu sectors", extra_floor.control_sector_index, sectors.size());
+	}
+
 	// --- TranslucentLine ---
-	if (special == 208)
+	else if (special == 208)
 	{
 		// Get tagged lines
 		vector<MapLine*> tagged;

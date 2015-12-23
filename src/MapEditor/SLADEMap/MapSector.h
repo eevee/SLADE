@@ -32,6 +32,24 @@ struct doom64sector_t
 	uint16_t	flags;
 };
 
+struct extra_floor_t
+{
+	enum
+	{
+		// TODO how does vavoom work?  their wiki is always broken
+		//VAVOOM,
+		SOLID = 1,
+		SWIMMABLE = 2,
+		NONSOLID = 3,
+	};
+
+	plane_t floor_plane;
+	plane_t ceiling_plane;
+	unsigned control_sector_index;
+	int floor_type;
+	float alpha;
+};
+
 enum PlaneType
 {
 	FLOOR_PLANE,
@@ -59,12 +77,17 @@ private:
 	bool				poly_needsupdate;
 	long				geometry_updated;
 	fpoint2_t			text_point;
+
+	// Computed properties from MapSpecials, not directly stored in the map data
 	plane_t				plane_floor;
 	plane_t				plane_ceiling;
 
 	void		setGeometryUpdated();
 
 public:
+	// TODO maybe make this private, maybe
+	vector<extra_floor_t> extra_floors;
+
 	MapSector(SLADEMap* parent = NULL);
 	MapSector(string f_tex, string c_tex, SLADEMap* parent = NULL);
 	~MapSector();
