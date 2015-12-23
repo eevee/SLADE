@@ -220,9 +220,8 @@ private:
 	quad_3d_t**			quads;
 	vector<quad_3d_t*>	quads_transparent;
 	vector<thing_3d_t>	things;
-	vector<flat_3d_t>	floors;
-	vector<flat_3d_t>	ceilings;
-	flat_3d_t**			flats;
+	vector<vector<flat_3d_t> >	sector_flats;
+	vector<flat_3d_t*>	flats;
 
 	// VBOs
 	unsigned	vbo_floors;
