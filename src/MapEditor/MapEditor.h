@@ -10,16 +10,24 @@ struct selection_3d_t
 {
 	int		index;
 	uint8_t	type;
+	int		extra_floor_index;
 
-	selection_3d_t(int index = -1, uint8_t type = 0)
+	selection_3d_t(int index = -1, uint8_t type = 0, int extra_floor_index = -1)
 	{
 		this->index = index;
 		this->type = type;
+		this->extra_floor_index = extra_floor_index;
 	}
 
-	bool operator<(const selection_3d_t& other) const {
+	bool operator<(const selection_3d_t& other) const
+	{
 		if (this->type == other.type)
-			return this->index < other.index;
+		{
+			if (this->index == other.index)
+				return this->extra_floor_index < other.extra_floor_index;
+			else
+				return this->index < other.index;
+		}
 		else
 			return this->type < other.type;
 	}

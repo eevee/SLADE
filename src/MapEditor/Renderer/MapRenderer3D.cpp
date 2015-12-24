@@ -837,6 +837,7 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 	MapSector* sector = map->getSector(index);
 	flat_3d_t& floor_flat = sector_flats[index][0];
 	floor_flat.sector = sector;
+	floor_flat.extra_floor_index = -1;
 	floor_flat.texture = theMapEditor->textureManager().getFlat(sector->getFloorTex(), theGameConfiguration->mixTexFlats());
 	floor_flat.colour = sector->getColour(1, true);
 	floor_flat.fogcolour = sector->getFogColour();
@@ -850,6 +851,7 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 	// Update ceiling
 	flat_3d_t& ceiling_flat = sector_flats[index][1];
 	ceiling_flat.sector = sector;
+	ceiling_flat.extra_floor_index = -1;
 	ceiling_flat.texture = theMapEditor->textureManager().getFlat(sector->getCeilingTex(), theGameConfiguration->mixTexFlats());
 	ceiling_flat.colour = sector->getColour(2, true);
 	ceiling_flat.fogcolour = sector->getFogColour();
@@ -870,6 +872,7 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 		// TODO BOTH sides of the inner flat are drawn sometimes!
 		flat_3d_t xf_floor;
 		xf_floor.sector = sector;
+		xf_floor.extra_floor_index = a;
 		xf_floor.texture = theMapEditor->textureManager().getFlat(control_sector->getFloorTex(), theGameConfiguration->mixTexFlats());
 		// TODO wrong.  maybe?  does it inherit from parent?
 		xf_floor.colour = sector->getColour(1);
@@ -887,6 +890,7 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 
 		flat_3d_t xf_ceiling;
 		xf_ceiling.sector = sector;
+		xf_ceiling.extra_floor_index = a;
 		xf_ceiling.texture = theMapEditor->textureManager().getFlat(control_sector->getCeilingTex(), theGameConfiguration->mixTexFlats());
 		xf_ceiling.colour = sector->getColour(1);
 		// TODO again, maybe?
@@ -1111,21 +1115,41 @@ void MapRenderer3D::renderFlatSelection(vector<selection_3d_t>& selection, float
 	// Go through selection
 	for (unsigned a = 0; a < selection.size(); a++)
 	{
+		selection_3d_t& hilight = selection[a];
+		// TODO this code is awfully similar to the renderHilight code
 		// Ignore if not a sector hilight
-		if (selection[a].type != MapEditor::SEL_CEILING && selection[a].type != MapEditor::SEL_FLOOR)
+		if (hilight.type != MapEditor::SEL_CEILING && hilight.type != MapEditor::SEL_FLOOR)
 			continue;
 
 		// Get sector
-		MapSector* sector = map->getSector(selection[a].index);
+		MapSector* sector = map->getSector(hilight.index);
 		if (!sector)
 			return;
 
 		// Get plane
 		plane_t plane;
-		if (selection[a].type == MapEditor::SEL_FLOOR)
-			plane = sector->getFloorPlane();
+		if (hilight.extra_floor_index >= 0 && hilight.extra_floor_index < sector->extra_floors.size())
+		{
+			extra_floor_t& extra = sector->extra_floors[hilight.extra_floor_index];
+			MapSector* control_sector = map->getSector(extra.control_sector_index);
+			if (!control_sector)
+				return;
+
+			// Planes are reversed for a 3D floor
+			// TODO the DRAWBOTH hack makes the type wrong when you're inside
+			// TODO not true for vavoom
+			if (hilight.type == MapEditor::SEL_FLOOR)
+				plane = control_sector->getCeilingPlane();
+			else
+				plane = control_sector->getFloorPlane();
+		}
 		else
-			plane = sector->getCeilingPlane();
+		{
+			if (hilight.type == MapEditor::SEL_FLOOR)
+				plane = sector->getFloorPlane();
+			else
+				plane = sector->getCeilingPlane();
+		}
 
 		// Draw sector outline
 		vector<MapLine*> lines;
@@ -2747,10 +2771,10 @@ selection_3d_t MapRenderer3D::determineHilight()
 			if (!map->getSector(a)->isWithin((cam_position + cam_dir3d * dist).get2d()))
 				continue;
 
-			// TODO not good enough; needs to indicate which 3d floor as well
 			current.index = a;
+			current.extra_floor_index = flat.extra_floor_index;
 			min_dist = dist;
-			if (sector_flats[a][b].flags & CEIL)
+			if (flat.flags & CEIL)
 				current.type = MapEditor::SEL_CEILING;
 			else
 				current.type = MapEditor::SEL_FLOOR;
@@ -2910,10 +2934,28 @@ void MapRenderer3D::renderHilight(selection_3d_t hilight, float alpha)
 
 		// Get plane
 		plane_t plane;
-		if (hilight.type == MapEditor::SEL_FLOOR)
-			plane = sector->getFloorPlane();
+		if (hilight.extra_floor_index >= 0 && hilight.extra_floor_index < sector->extra_floors.size())
+		{
+			extra_floor_t& extra = sector->extra_floors[hilight.extra_floor_index];
+			MapSector* control_sector = map->getSector(extra.control_sector_index);
+			if (!control_sector)
+				return;
+
+			// Planes are reversed for a 3D floor
+			// TODO the DRAWBOTH hack makes the type wrong when you're inside
+			// TODO not true for vavoom
+			if (hilight.type == MapEditor::SEL_FLOOR)
+				plane = control_sector->getCeilingPlane();
+			else
+				plane = control_sector->getFloorPlane();
+		}
 		else
-			plane = sector->getCeilingPlane();
+		{
+			if (hilight.type == MapEditor::SEL_FLOOR)
+				plane = sector->getFloorPlane();
+			else
+				plane = sector->getCeilingPlane();
+		}
 
 		// Render sector outline
 		vector<MapLine*> lines;

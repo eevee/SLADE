@@ -96,6 +96,7 @@ public:
 		float		base_alpha;
 		float		alpha;
 		MapSector*	sector;
+		int			extra_floor_index;
 		long		updated_time;
 		unsigned	vbo_start;
 
