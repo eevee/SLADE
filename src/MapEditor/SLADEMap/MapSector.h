@@ -36,7 +36,7 @@ struct extra_floor_t
 {
 	enum
 	{
-		// TODO how does vavoom work?  their wiki is always broken
+		// TODO how does vavoom work?  their wiki is always broken.  i think they have floor and ceiling reversed from zdoom mode
 		//VAVOOM,
 		SOLID = 1,
 		SWIMMABLE = 2,
@@ -48,6 +48,7 @@ struct extra_floor_t
 	unsigned control_sector_index;
 	int floor_type;
 	float alpha;
+	bool draw_inside;
 };
 
 enum PlaneType
