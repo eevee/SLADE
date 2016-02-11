@@ -20,10 +20,8 @@ struct gl_polygon_t
 {
 	gl_vertex_t*	vertices;
 	unsigned		n_vertices;
-	unsigned		vbo_offset;
-	unsigned		vbo_index;
 
-	gl_polygon_t() { vertices = NULL; n_vertices = 0; vbo_offset = 0; }
+	gl_polygon_t() { vertices = NULL; n_vertices = 0; }
 	~gl_polygon_t() { if (vertices) delete[] vertices; }
 };
 
@@ -67,12 +65,12 @@ public:
 	void	updateTextureCoords(double scale_x = 1, double scale_y = 1, double offset_x = 0, double offset_y = 0, double rotation = 0);
 
 	unsigned	vboDataSize();
-	unsigned	writeToVBO(unsigned offset, unsigned index);
-	void		updateVBOData(unsigned start = 0);
+	unsigned	writeToVBO(unsigned offset);
+	void		updateVBOData(unsigned offset);
 
 	void	render();
 	void	renderWireframe();
-	void	renderVBO(unsigned start = 0, bool colour = true);
+	void	renderVBO(unsigned offset);
 	void	renderWireframeVBO(bool colour = true);
 
 	static void	setupVBOPointers();

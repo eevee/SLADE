@@ -2022,7 +2022,7 @@ void MapRenderer2D::renderFlatsVBO(int type, bool texture, float alpha)
 		// Update polygon VBO data if needed
 		if (poly->vboUpdate() > 0)
 		{
-			poly->updateVBOData();
+			poly->updateVBOData(sector_vbo_offsets[a]);
 			update++;
 			if (update > 200)
 				break;
@@ -2047,7 +2047,7 @@ void MapRenderer2D::renderFlatsVBO(int type, bool texture, float alpha)
 			col.ampf(flat_brightness, flat_brightness, flat_brightness, 1.0f);
 			glColor4f(col.fr(), col.fg(), col.fb(), alpha);
 		}
-		poly->renderVBO(false);
+		poly->renderVBO(sector_vbo_offsets[a]);
 	}
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -2854,6 +2854,8 @@ void MapRenderer2D::updateFlatsVBO()
 	if (vbo_flats == 0)
 		glGenBuffers(1, &vbo_flats);
 
+	sector_vbo_offsets.resize(map->nSectors());
+
 	// Get total size needed
 	unsigned totalsize = 0;
 	for (unsigned a = 0; a < map->nSectors(); a++)
@@ -2868,12 +2870,11 @@ void MapRenderer2D::updateFlatsVBO()
 
 	// Write polygon data to VBO
 	unsigned offset = 0;
-	unsigned index = 0;
 	for (unsigned a = 0; a < map->nSectors(); a++)
 	{
+		sector_vbo_offsets[a] = offset;
 		Polygon2D* poly = map->getSector(a)->getPolygon();
-		offset = poly->writeToVBO(offset, index);
-		index += poly->totalVertices();
+		offset = poly->writeToVBO(offset);
 	}
 
 	// Clean up

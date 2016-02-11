@@ -24,6 +24,7 @@ private:
 	unsigned	vbo_vertices;
 	unsigned	vbo_lines;
 	unsigned	vbo_flats;
+	vector<unsigned>	sector_vbo_offsets;
 
 	// Display lists
 	unsigned	list_vertices;

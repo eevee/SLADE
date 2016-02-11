@@ -829,12 +829,10 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 	if (index >= map->nSectors())
 		return;
 
-	// TODO this might be too extreme -- only really need to resize and allow the assignments below
-	sector_flats[index].clear();
-	sector_flats[index].resize(2);
+	MapSector* sector = map->getSector(index);
+	sector_flats[index].resize(2 * (1 + sector->extra_floors.size()));
 
 	// Update floor
-	MapSector* sector = map->getSector(index);
 	flat_3d_t& floor_flat = sector_flats[index][0];
 	floor_flat.sector = sector;
 	floor_flat.extra_floor_index = -1;
@@ -870,7 +868,7 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 
 		// TODO which of these is really a floor and which is really a ceiling?
 		// TODO BOTH sides of the inner flat are drawn sometimes!
-		flat_3d_t xf_floor;
+		flat_3d_t& xf_floor = sector_flats[index][2 * (a + 1)];
 		xf_floor.sector = sector;
 		xf_floor.extra_floor_index = a;
 		xf_floor.texture = theMapEditor->textureManager().getFlat(control_sector->getFloorTex(), theGameConfiguration->mixTexFlats());
@@ -886,9 +884,8 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 			xf_floor.flags |= DRAWBOTH;
 		xf_floor.plane = control_sector->getFloorPlane();
 		xf_floor.base_alpha = extra.alpha;
-		sector_flats[index].push_back(xf_floor);
 
-		flat_3d_t xf_ceiling;
+		flat_3d_t& xf_ceiling = sector_flats[index][2 * (a + 1) + 1];
 		xf_ceiling.sector = sector;
 		xf_ceiling.extra_floor_index = a;
 		xf_ceiling.texture = theMapEditor->textureManager().getFlat(control_sector->getCeilingTex(), theGameConfiguration->mixTexFlats());
@@ -902,7 +899,6 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 			xf_ceiling.flags |= DRAWBOTH;
 		xf_ceiling.plane = control_sector->getCeilingPlane();
 		xf_ceiling.base_alpha = extra.alpha;
-		sector_flats[index].push_back(xf_ceiling);
 	}
 	if (sector_flats[index].size() > 2)
 		LOG_MESSAGE(2, "sector %d has %lu flats", index, sector_flats[index].size());
@@ -917,7 +913,7 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 			updateFlatTexCoords(index, a);
 			Polygon2D::setupVBOPointers();
 			sector->getPolygon()->setZ(sector_flats[index][a].plane);
-			sector->getPolygon()->updateVBOData(sector_flats[index][a].vbo_start);
+			sector->getPolygon()->updateVBOData(sector_flats[index][a].vbo_offset);
 		}
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -991,7 +987,7 @@ void MapRenderer3D::renderFlat(flat_3d_t* flat)
 		}
 
 		// Render
-		flat->sector->getPolygon()->renderVBO(flat->vbo_start, false);
+		flat->sector->getPolygon()->renderVBO(flat->vbo_offset);
 	}
 	else
 	{
@@ -2396,21 +2392,13 @@ void MapRenderer3D::updateFlatsVBO()
 		Polygon2D* poly = sector->getPolygon();
 
 		// TODO i realize we'll have to do this if any 3d floors are /added/, too
-		unsigned start = index;
-		unsigned orig_offset = offset;
 		for (unsigned b = 0; b < sector_flats[a].size(); b++)
 		{
 			// Write flat to VBO
-			// TODO this is a stupid hack
-			sector_flats[a][b].vbo_start = index - start;
+			sector_flats[a][b].vbo_offset = offset;
 			poly->setZ(sector_flats[a][b].plane);
-			offset = poly->writeToVBO(offset, index);
-			index += poly->totalVertices();
+			offset = poly->writeToVBO(offset);
 		}
-
-		// TODO this is extra super bad but basically we have to make sure the poly uses the offset for the /first/ sector flat here...  ugh
-		poly->setZ(sector_flats[a][0].plane);
-		poly->writeToVBO(orig_offset, start);
 
 		// Reset polygon z
 		poly->setZ(0.0f);

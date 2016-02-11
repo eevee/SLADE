@@ -6,6 +6,9 @@
 #include "MathStuff.h"
 #include "OpenGL/OpenGL.h"
 
+// Number of bytes per vertex in a GL vertex array
+static const int VERTEX_SIZE = 20;
+
 Polygon2D::Polygon2D()
 {
 	vbo_update = 2;
@@ -177,39 +180,37 @@ unsigned Polygon2D::vboDataSize()
 {
 	unsigned total = 0;
 	for (unsigned a = 0; a < subpolys.size(); a++)
-		total += subpolys[a]->n_vertices * 20;
+		total += subpolys[a]->n_vertices * VERTEX_SIZE;
 	return total;
 }
 
-unsigned Polygon2D::writeToVBO(unsigned offset, unsigned index)
+unsigned Polygon2D::writeToVBO(unsigned offset)
 {
 	// Go through subpolys
-	unsigned ofs = offset;
-	unsigned i = index;
 	for (unsigned a = 0; a < subpolys.size(); a++)
 	{
 		// Write subpoly data to VBO at the correct offset
-		glBufferSubData(GL_ARRAY_BUFFER, ofs, subpolys[a]->n_vertices*20, subpolys[a]->vertices);
-
-		// Update the subpoly vbo offset
-		subpolys[a]->vbo_offset = ofs;
-		subpolys[a]->vbo_index = i;
-		ofs += subpolys[a]->n_vertices*20;
-		i += subpolys[a]->n_vertices;
+		unsigned length = subpolys[a]->n_vertices * VERTEX_SIZE;
+		glBufferSubData(GL_ARRAY_BUFFER, offset, length, subpolys[a]->vertices);
+		offset += length;
 	}
 
 	// Update variables
 	vbo_update = 0;
 
 	// Return the offset to the end of the data
-	return ofs;
+	return offset;
 }
 
-void Polygon2D::updateVBOData(unsigned start)
+void Polygon2D::updateVBOData(unsigned offset)
 {
 	// Go through subpolys
 	for (unsigned a = 0; a < subpolys.size(); a++)
-		glBufferSubData(GL_ARRAY_BUFFER, subpolys[a]->vbo_offset + start*20, subpolys[a]->n_vertices*20, subpolys[a]->vertices);
+	{
+		unsigned length = subpolys[a]->n_vertices * VERTEX_SIZE;
+		glBufferSubData(GL_ARRAY_BUFFER, offset, length, subpolys[a]->vertices);
+		offset += length;
+	}
 
 	// Update variables
 	vbo_update = 0;
@@ -247,12 +248,16 @@ void Polygon2D::renderWireframe()
 	}
 }
 
-void Polygon2D::renderVBO(unsigned start, bool colour)
+void Polygon2D::renderVBO(unsigned offset)
 {
 	// Render
 	//glColor4f(this->colour[0], this->colour[1], this->colour[2], this->colour[3]);
+	unsigned index = offset / VERTEX_SIZE;
 	for (unsigned a = 0; a < subpolys.size(); a++)
-		glDrawArrays(GL_TRIANGLE_FAN, subpolys[a]->vbo_index + start, subpolys[a]->n_vertices);
+	{
+		glDrawArrays(GL_TRIANGLE_FAN, index, subpolys[a]->n_vertices);
+		index += subpolys[a]->n_vertices;
+	}
 }
 
 void Polygon2D::renderWireframeVBO(bool colour)
