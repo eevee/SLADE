@@ -601,6 +601,11 @@ struct frect_t
 		br.set(rect.br);
 	}
 
+	frect_t flip()
+	{
+		return frect_t(br, tl);
+	}
+
 	double x1() { return tl.x; }
 	double y1() { return tl.y; }
 	double x2() { return br.x; }
