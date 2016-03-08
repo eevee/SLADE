@@ -216,6 +216,7 @@ void MapSpecials::processZDoomLineSpecial(MapLine* line)
 		extra_floor.ceiling_plane = control_sector->getCeilingPlane();
 
 		extra_floor.control_sector_index = control_sector->getIndex();
+		extra_floor.control_line_index = line->getIndex();
 		extra_floor.floor_type = type_flags & 0x3;
 
 		extra_floor.alpha = falpha;

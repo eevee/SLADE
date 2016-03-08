@@ -46,6 +46,7 @@ struct extra_floor_t
 	plane_t floor_plane;
 	plane_t ceiling_plane;
 	unsigned control_sector_index;
+	unsigned control_line_index;
 	int floor_type;
 	float alpha;
 	bool draw_inside;
