@@ -1295,6 +1295,17 @@ void MapRenderer3D::updateLine(unsigned index)
 	if (line->hasProp("alpha"))
 		alpha = line->floatProperty("alpha");
 
+	int line_shading = 0;
+	if (render_shade_orthogonal_lines)
+	{
+		// Increase light level for N/S facing lines
+		if (line->x1() == line->x2())
+			line_shading = +16;
+		// Decrease light level for E/W facing lines
+		else if (line->y1() == line->y2())
+			line_shading = -16;
+	}
+
 	// Get first side info
 	int floor1 = line->frontSector()->getFloorHeight();
 	int ceiling1 = line->frontSector()->getCeilingHeight();
@@ -1306,25 +1317,12 @@ void MapRenderer3D::updateLine(unsigned index)
 	int xoff1 = line->s1()->getOffsetX();
 	int yoff1 = line->s1()->getOffsetY();
 
-	if (render_shade_orthogonal_lines)
+	if (line_shading)
 	{
-		// Increase light level for N/S facing lines
-		if (line->x1() == line->x2())
-		{
-			colour1.r = MathStuff::clamp(colour1.r + 16, 0, 255);
-			colour1.g = MathStuff::clamp(colour1.g + 16, 0, 255);
-			colour1.b = MathStuff::clamp(colour1.b + 16, 0, 255);
-			light1 = MathStuff::clamp(light1 + 16, 0, 255);
-		}
-
-		// Decrease light level for E/W facing lines
-		if (line->y1() == line->y2())
-		{
-			colour1.r = MathStuff::clamp(colour1.r - 16, 0, 255);
-			colour1.g = MathStuff::clamp(colour1.g - 16, 0, 255);
-			colour1.b = MathStuff::clamp(colour1.b - 16, 0, 255);
-			light1 = MathStuff::clamp(light1 - 16, 0, 255);
-		}
+		colour1.r = MathStuff::clamp(colour1.r + line_shading, 0, 255);
+		colour1.g = MathStuff::clamp(colour1.g + line_shading, 0, 255);
+		colour1.b = MathStuff::clamp(colour1.b + line_shading, 0, 255);
+		light1 = MathStuff::clamp(light1 + line_shading, 0, 255);
 	}
 
 	// --- One-sided line ---
@@ -1373,6 +1371,7 @@ void MapRenderer3D::updateLine(unsigned index)
 	string sky_flat = theGameConfiguration->skyFlat();
 	string hidden_tex = map->currentFormat() == MAP_DOOM64 ? "?" : "-";
 	bool show_midtex = (map->currentFormat() != MAP_DOOM64) || (line->intProperty("flags") & 512);
+
 	// Heights at both endpoints, for both planes, on both sides
 	double f1h1 = fp1.height_at(line->x1(), line->y1());
 	double f1h2 = fp1.height_at(line->x2(), line->y2());
@@ -1383,25 +1382,12 @@ void MapRenderer3D::updateLine(unsigned index)
 	double c2h1 = cp2.height_at(line->x1(), line->y1());
 	double c2h2 = cp2.height_at(line->x2(), line->y2());
 
-	if (render_shade_orthogonal_lines)
+	if (line_shading)
 	{
-		// Increase light level for N/S facing lines
-		if (line->x1() == line->x2())
-		{
-			colour2.r = MathStuff::clamp(colour2.r + 16, 0, 255);
-			colour2.g = MathStuff::clamp(colour2.g + 16, 0, 255);
-			colour2.b = MathStuff::clamp(colour2.b + 16, 0, 255);
-			light2 = MathStuff::clamp(light2 + 16, 0, 255);
-		}
-
-		// Decrease light level for E/W facing lines
-		if (line->y1() == line->y2())
-		{
-			colour2.r = MathStuff::clamp(colour2.r - 16, 0, 255);
-			colour2.g = MathStuff::clamp(colour2.g - 16, 0, 255);
-			colour2.b = MathStuff::clamp(colour2.b - 16, 0, 255);
-			light2 = MathStuff::clamp(light2 - 16, 0, 255);
-		}
+		colour2.r = MathStuff::clamp(colour2.r + line_shading, 0, 255);
+		colour2.g = MathStuff::clamp(colour2.g + line_shading, 0, 255);
+		colour2.b = MathStuff::clamp(colour2.b + line_shading, 0, 255);
+		light2 = MathStuff::clamp(light2 + line_shading, 0, 255);
 	}
 
 	// Front lower
