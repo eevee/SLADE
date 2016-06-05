@@ -178,6 +178,12 @@ void MapSpecials::processZDoomMapSpecials(SLADEMap* map)
 /* MapSpecials::processZDoomLineSpecial
  * Process ZDoom line special
  *******************************************************************/
+static bool _sort_extra_floors(extra_floor_t& a, extra_floor_t& b)
+{
+	// Sort extra floors from top down
+	return b.effective_height < a.effective_height;
+}
+
 void MapSpecials::processZDoomLineSpecial(MapLine* line)
 {
 	// Get special
@@ -212,13 +218,16 @@ void MapSpecials::processZDoomLineSpecial(MapLine* line)
 		// surfaces drawn as well
 		// TODO this does something different with vavoom
 		extra_floor.draw_inside = (type_flags & 4 || (type_flags & 3) == 2);
-		extra_floor.ceiling_only = (flags & 8);
+		extra_floor.flags = flags;
 
 		// TODO only gzdoom supports slopes here.
 		// TODO this should probably happen live instead of being copied, if
 		// we're moving towards purely live updates here
+		// Guessing a bit here, but I suspect ZDoom sorts floors in order of
+		// the control sector's plain ceiling height
+		extra_floor.effective_height = control_sector->getCeilingHeight();
 		extra_floor.ceiling_plane = control_sector->getCeilingPlane();
-		if (extra_floor.ceiling_only)
+		if (extra_floor.ceilingOnly())
 			extra_floor.floor_plane = extra_floor.ceiling_plane;
 		else
 			extra_floor.floor_plane = control_sector->getFloorPlane();
@@ -234,6 +243,7 @@ void MapSpecials::processZDoomLineSpecial(MapLine* line)
 		for (unsigned a = 0; a < sectors.size(); a++)
 		{
 			sectors[a]->extra_floors.push_back(extra_floor);
+			std::sort(sectors[a]->extra_floors.begin(), sectors[a]->extra_floors.end(), _sort_extra_floors);
 
 			// Mark the target sector as updated if the control sector has
 			// been; this is a sort of very rudimentary dependency graph

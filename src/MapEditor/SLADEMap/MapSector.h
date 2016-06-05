@@ -41,16 +41,34 @@ struct extra_floor_t
 		SOLID = 1,
 		SWIMMABLE = 2,
 		NONSOLID = 3,
+
+		DISABLE_LIGHTING = 1,
+		LIGHTING_INSIDE_ONLY = 2,
+		INNER_FOG_EFFECT = 4,
+		FLAT_AT_CEILING = 8,
+		USE_UPPER_TEXTURE = 16,
+		USE_LOWER_TEXTURE = 32,
+		ADDITIVE_TRANSPARENCY = 64,
 	};
 
 	plane_t floor_plane;
 	plane_t ceiling_plane;
+	short effective_height;
+	short floor_light;
+	short ceiling_light;
 	unsigned control_sector_index;
 	unsigned control_line_index;
 	int floor_type;
 	float alpha;
 	bool draw_inside;
-	bool ceiling_only;
+	unsigned char flags;
+
+	bool disableLighting() { return flags & extra_floor_t::DISABLE_LIGHTING; }
+	bool lightingInsideOnly() { return flags & extra_floor_t::LIGHTING_INSIDE_ONLY; }
+	bool ceilingOnly() { return flags & extra_floor_t::FLAT_AT_CEILING; }
+	bool useUpperTexture() { return flags & extra_floor_t::USE_UPPER_TEXTURE; }
+	bool useLowerTexture() { return flags & extra_floor_t::USE_LOWER_TEXTURE; }
+	bool additiveTransparency() { return flags & extra_floor_t::ADDITIVE_TRANSPARENCY; }
 };
 
 enum PlaneType
@@ -141,7 +159,7 @@ public:
 	bool				getLines(vector<MapLine*>& list);
 	bool				getVertices(vector<MapVertex*>& list);
 	bool				getVertices(vector<MapObject*>& list);
-	uint8_t				getLight(int where = 0);
+	uint8_t				getLight(int where = 0, int extra_floor_index = -1);
 	void				changeLight(int amount, int where = 0);
 	rgba_t				getColour(int where = 0, bool fullbright = false);
 	rgba_t				getFogColour();

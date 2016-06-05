@@ -463,15 +463,35 @@ bool MapSector::getVertices(vector<MapObject*>& list)
  * Returns the light level of the sector at [where] - 1 = floor,
  * 2 = ceiling
  *******************************************************************/
-uint8_t MapSector::getLight(int where)
+uint8_t MapSector::getLight(int where, int extra_floor_index)
 {
 	// Check for UDMF+ZDoom namespace
 	if (parent_map->currentFormat() == MAP_UDMF && S_CMPNOCASE(parent_map->udmfNamespace(), "zdoom"))
 	{
+		// 3D floors cast their light downwards to the next floor down, so we
+		// need to know which floor this plane is below.
+		// The floor plane is on the bottom of the 3D floor, so no change is
+		// necessary -- unless we're being asked for the light of the sector
+		// itself, which is below the bottommost floor.
+		// Ceilings are below the next 3D floor up, so subtract 1.
+		int floor_gap = extra_floor_index;
+		if (where == 2)
+			floor_gap--;
+		else if (where == 1 && floor_gap < 0)
+			floor_gap = extra_floors.size() - 1;
+		MapSector* control_sector = this;
+		if (floor_gap >= 0 && floor_gap < extra_floors.size() &&
+			!extra_floors[floor_gap].disableLighting() &&
+			!extra_floors[floor_gap].lightingInsideOnly())
+		{
+			control_sector = parent_map->getSector(extra_floors[floor_gap].control_sector_index);
+		}
+
 		// Get general light level
-		int l = light;
+		int l = control_sector->getLightLevel();
 
 		// Get specific light level
+		// TODO unclear how 3D floors work here -- what wins?  what sector does it come from?
 		if (where == 1)
 		{
 			// Floor
@@ -484,6 +504,7 @@ uint8_t MapSector::getLight(int where)
 		else if (where == 2)
 		{
 			// Ceiling
+
 			int cl = intProperty("lightceiling");
 			if (boolProperty("lightceilingabsolute"))
 				l = cl;
