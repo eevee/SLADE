@@ -1320,9 +1320,6 @@ void MapRenderer3D::updateLine(unsigned index)
 	if (!line->s1())
 		return;
 
-	// Process line special
-	map->mapSpecials()->processLineSpecial(line);
-
 	// Get relevant line info
 	int map_format = theMapEditor->currentMapDesc().format;
 	bool upeg = theGameConfiguration->lineBasicFlagSet("dontpegtop", line, map_format);
