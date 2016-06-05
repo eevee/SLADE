@@ -241,7 +241,16 @@ void MapSpecials::processZDoomLineSpecial(MapLine* line)
 		vector<MapSector*> sectors;
 		map->getSectorsByTag(sector_tag, sectors);
 		for (unsigned a = 0; a < sectors.size(); a++)
+		{
 			sectors[a]->extra_floors.push_back(extra_floor);
+
+			// Mark the target sector as updated if the control sector has
+			// been; this is a sort of very rudimentary dependency graph
+			if (control_sector->geometryUpdatedTime() > sectors[a]->geometryUpdatedTime())
+				sectors[a]->setGeometryUpdated();
+			if (control_sector->modifiedTime() > sectors[a]->modifiedTime())
+				sectors[a]->setModified();
+		}
 		LOG_MESSAGE(4, "adding a 3d floor controlled by sector %d to %lu sectors", extra_floor.control_sector_index, sectors.size());
 	}
 
