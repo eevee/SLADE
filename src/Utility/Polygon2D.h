@@ -66,7 +66,6 @@ public:
 
 	unsigned	vboDataSize();
 	unsigned	writeToVBO(unsigned offset);
-	void		updateVBOData(unsigned offset);
 
 	void	render();
 	void	renderWireframe();

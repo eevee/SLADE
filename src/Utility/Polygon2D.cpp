@@ -202,20 +202,6 @@ unsigned Polygon2D::writeToVBO(unsigned offset)
 	return offset;
 }
 
-void Polygon2D::updateVBOData(unsigned offset)
-{
-	// Go through subpolys
-	for (unsigned a = 0; a < subpolys.size(); a++)
-	{
-		unsigned length = subpolys[a]->n_vertices * VERTEX_SIZE;
-		glBufferSubData(GL_ARRAY_BUFFER, offset, length, subpolys[a]->vertices);
-		offset += length;
-	}
-
-	// Update variables
-	vbo_update = 0;
-}
-
 void Polygon2D::render()
 {
 	// Go through sub-polys

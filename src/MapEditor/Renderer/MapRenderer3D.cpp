@@ -791,6 +791,7 @@ void MapRenderer3D::updateFlatTexCoords(unsigned index, unsigned flat_index)
 
 	// Get sector
 	MapSector* sector = map->getSector(index);
+	MapSector* control_sector = sector_flats[index][flat_index].control_sector;
 
 	// Get scaling/offset info
 	double ox = 0;
@@ -803,22 +804,21 @@ void MapRenderer3D::updateFlatTexCoords(unsigned index, unsigned flat_index)
 	// Check for UDMF + ZDoom extensions
 	if (theMapEditor->currentMapDesc().format == MAP_UDMF && S_CMPNOCASE(theGameConfiguration->udmfNamespace(), "zdoom"))
 	{
-		// TODO 3dfloors -- this should be taken from the control sector
 		if (!(sector_flats[index][flat_index].flags & CEIL))
 		{
-			ox = sector->floatProperty("xpanningfloor");
-			oy = sector->floatProperty("ypanningfloor");
-			sx *= (1.0 / sector->floatProperty("xscalefloor"));
-			sy *= (1.0 / sector->floatProperty("yscalefloor"));
-			rot = sector->floatProperty("rotationfloor");
+			ox = control_sector->floatProperty("xpanningfloor");
+			oy = control_sector->floatProperty("ypanningfloor");
+			sx *= (1.0 / control_sector->floatProperty("xscalefloor"));
+			sy *= (1.0 / control_sector->floatProperty("yscalefloor"));
+			rot = control_sector->floatProperty("rotationfloor");
 		}
 		else
 		{
-			ox = sector->floatProperty("xpanningceiling");
-			oy = sector->floatProperty("ypanningceiling");
-			sx *= (1.0 / sector->floatProperty("xscaleceiling"));
-			sy *= (1.0 / sector->floatProperty("yscaleceiling"));
-			rot = sector->floatProperty("rotationceiling");
+			ox = control_sector->floatProperty("xpanningceiling");
+			oy = control_sector->floatProperty("ypanningceiling");
+			sx *= (1.0 / control_sector->floatProperty("xscaleceiling"));
+			sy *= (1.0 / control_sector->floatProperty("yscaleceiling"));
+			rot = control_sector->floatProperty("rotationceiling");
 		}
 	}
 
@@ -835,7 +835,16 @@ void MapRenderer3D::updateFlatTexCoords(unsigned index, unsigned flat_index)
 /* MapRenderer3D::updateSector
  * Updates cached rendering data for sector [index]
  *******************************************************************/
-void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
+void MapRenderer3D::updateSector(unsigned index)
+{
+	updateSectorFlats(index);
+	updateSectorVBOs(index);
+}
+
+/* MapRenderer3D::updateSectorFlats
+ * Updates flat structures for sector [index]
+ *******************************************************************/
+void MapRenderer3D::updateSectorFlats(unsigned index)
 {
 	// Check index
 	if (index >= map->nSectors())
@@ -847,6 +856,7 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 	// Update floor
 	flat_3d_t& floor_flat = sector_flats[index][0];
 	floor_flat.sector = sector;
+	floor_flat.control_sector = sector;
 	floor_flat.extra_floor_index = -1;
 	floor_flat.texture = theMapEditor->textureManager().getFlat(sector->getFloorTex(), theGameConfiguration->mixTexFlats());
 	floor_flat.colour = sector->getColour(1, true);
@@ -861,6 +871,7 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 	// Update ceiling
 	flat_3d_t& ceiling_flat = sector_flats[index][1];
 	ceiling_flat.sector = sector;
+	ceiling_flat.control_sector = sector;
 	ceiling_flat.extra_floor_index = -1;
 	ceiling_flat.texture = theMapEditor->textureManager().getFlat(sector->getCeilingTex(), theGameConfiguration->mixTexFlats());
 	ceiling_flat.colour = sector->getColour(2, true);
@@ -882,59 +893,72 @@ void MapRenderer3D::updateSector(unsigned index, bool update_vbo)
 		// TODO BOTH sides of the inner flat are drawn sometimes!
 		flat_3d_t& xf_floor = sector_flats[index][2 * (a + 1)];
 		xf_floor.sector = sector;
+		xf_floor.control_sector = control_sector;
 		xf_floor.extra_floor_index = a;
 		xf_floor.texture = theMapEditor->textureManager().getFlat(control_sector->getFloorTex(), theGameConfiguration->mixTexFlats());
 		// TODO wrong.  maybe?  does it inherit from parent?
-		xf_floor.colour = sector->getColour(1);
+		xf_floor.colour = control_sector->getColour(1);
 		// TODO again, maybe?
 		xf_floor.fogcolour = sector->getFogColour();
 		// TODO oughta support screen blends too!!
 		// TODO this probably comes from the control sector, unless there's a flag, yadda...
-		xf_floor.light = sector->getLight(0);
+		// TODO more importantly, it propagates downwards to the next floor
+		xf_floor.light = control_sector->getLight(0);
 		xf_floor.flags = CEIL;
 		if (extra.draw_inside)
 			xf_floor.flags |= DRAWBOTH;
-		xf_floor.plane = control_sector->getFloorPlane();
+		xf_floor.plane = extra.floor_plane;
 		xf_floor.base_alpha = extra.alpha;
 
 		flat_3d_t& xf_ceiling = sector_flats[index][2 * (a + 1) + 1];
 		xf_ceiling.sector = sector;
+		xf_ceiling.control_sector = control_sector;
 		xf_ceiling.extra_floor_index = a;
 		xf_ceiling.texture = theMapEditor->textureManager().getFlat(control_sector->getCeilingTex(), theGameConfiguration->mixTexFlats());
-		xf_ceiling.colour = sector->getColour(1);
+		xf_ceiling.colour = control_sector->getColour(1);
 		// TODO again, maybe?
 		xf_ceiling.fogcolour = sector->getFogColour();
 		// TODO this probably comes from the control sector, unless there's a flag, yadda...
-		xf_ceiling.light = sector->getLight(0);
+		xf_ceiling.light = control_sector->getLight(0);
 		xf_ceiling.flags = 0;
 		if (extra.draw_inside)
 			xf_ceiling.flags |= DRAWBOTH;
-		xf_ceiling.plane = control_sector->getCeilingPlane();
+		xf_ceiling.plane = extra.ceiling_plane;
 		xf_ceiling.base_alpha = extra.alpha;
-	}
-	if (sector_flats[index].size() > 2)
-		LOG_MESSAGE(2, "sector %d has %lu flats", index, sector_flats[index].size());
-
-	// Update VBOs
-	if (OpenGL::vboSupport() && update_vbo)
-	{
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_flats);
-
-		for (unsigned a = 0; a < sector_flats[index].size(); a++)
-		{
-			updateFlatTexCoords(index, a);
-			Polygon2D::setupVBOPointers();
-			sector->getPolygon()->setZ(sector_flats[index][a].plane);
-			sector->getPolygon()->updateVBOData(sector_flats[index][a].vbo_offset);
-		}
-
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		sector->getPolygon()->setZ(0);
 	}
 
 	// Finish up
 	for (unsigned a = 0; a < sector_flats[index].size(); a++)
 		sector_flats[index][a].updated_time = theApp->runTimer();
+}
+
+/* MapRenderer3D::updateSectorVBOs
+ * Updates VBOs for sector [index]
+ *******************************************************************/
+void MapRenderer3D::updateSectorVBOs(unsigned index)
+{
+	if (!OpenGL::vboSupport())
+		return;
+
+	// Check index
+	if (index >= map->nSectors())
+		return;
+	MapSector* sector = map->getSector(index);
+	Polygon2D* poly = sector->getPolygon();
+
+	// Update VBOs
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_flats);
+	Polygon2D::setupVBOPointers();
+
+	for (unsigned a = 0; a < sector_flats[index].size(); a++)
+	{
+		updateFlatTexCoords(index, a);
+		poly->setZ(sector_flats[index][a].plane);
+		poly->writeToVBO(sector_flats[index][a].vbo_offset);
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	sector->getPolygon()->setZ(0);
 }
 
 /* MapRenderer3D::isSectorStale
@@ -1656,6 +1680,10 @@ void MapRenderer3D::updateLine(unsigned index)
 		for (unsigned a = 0; a < sector->extra_floors.size(); a++)
 		{
 			extra_floor_t& extra = sector->extra_floors[a];
+			if (extra.ceiling_only)
+				// A floor that's a flat plane can't possibly have any sides
+				continue;
+
 			MapSector* control_sector = map->getSector(extra.control_sector_index);
 			MapLine* control_line = map->getLine(extra.control_line_index);
 
@@ -2317,15 +2345,14 @@ void MapRenderer3D::updateFlatsVBO()
 	unsigned totalsize = 0;
 	for (unsigned a = 0; a < map->nSectors(); a++)
 	{
-		// Slight chicken and egg problem: updateSector() has to run first to
-		// create a flat_3d_t for each 3D floor, but it tries to update VBOs,
-		// which may not exist the first time this function runs.
-		// So, skip the VBOs specifically for this call.
+		// Create the sector flats structure, but don't try to update VBOs yet
+		// (since this function is recreating them)
 		if (isSectorStale(a))
-			updateSector(a, false);
+			updateSectorFlats(a);
 
-		Polygon2D* poly = map->getSector(a)->getPolygon();
-		totalsize += poly->vboDataSize() * sector_flats[a].size() * 2;
+		MapSector* sector = map->getSector(a);
+		Polygon2D* poly = sector->getPolygon();
+		totalsize += poly->vboDataSize() * sector_flats[a].size();
 	}
 
 	// Allocate buffer data
@@ -2347,6 +2374,7 @@ void MapRenderer3D::updateFlatsVBO()
 		{
 			// Write flat to VBO
 			sector_flats[a][b].vbo_offset = offset;
+			updateFlatTexCoords(a, b);
 			poly->setZ(sector_flats[a][b].plane);
 			offset = poly->writeToVBO(offset);
 		}
@@ -2876,17 +2904,14 @@ void MapRenderer3D::renderHilight(selection_3d_t hilight, float alpha)
 		if (hilight.extra_floor_index >= 0 && hilight.extra_floor_index < sector->extra_floors.size())
 		{
 			extra_floor_t& extra = sector->extra_floors[hilight.extra_floor_index];
-			MapSector* control_sector = map->getSector(extra.control_sector_index);
-			if (!control_sector)
-				return;
 
 			// Planes are reversed for a 3D floor
 			// TODO the DRAWBOTH hack makes the type wrong when you're inside
 			// TODO not true for vavoom
 			if (hilight.type == MapEditor::SEL_FLOOR)
-				plane = control_sector->getCeilingPlane();
+				plane = extra.ceiling_plane;
 			else
-				plane = control_sector->getFloorPlane();
+				plane = extra.floor_plane;
 		}
 		else
 		{
