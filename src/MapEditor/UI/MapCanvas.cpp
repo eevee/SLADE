@@ -1427,7 +1427,7 @@ void MapCanvas::drawMap3d()
 			// Update 3d info overlay
 			if (info_overlay_3d && hl.index >= 0)
 			{
-				info_3d.update(hl.index, hl.type, &(editor->getMap()));
+				info_3d.update(hl.index, hl.type, hl.extra_floor_index, &(editor->getMap()));
 				anim_info_show = true;
 			}
 			else
@@ -2342,7 +2342,7 @@ void MapCanvas::forceRefreshRenderer()
 	{
 		selection_3d_t hl;
 		hl = renderer_3d->determineHilight();
-		info_3d.update(hl.index, hl.type, &(editor->getMap()));
+		info_3d.update(hl.index, hl.type, hl.extra_floor_index, &(editor->getMap()));
 	}
 
 	renderer_2d->forceUpdate();

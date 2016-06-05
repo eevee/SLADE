@@ -85,8 +85,6 @@ private:
 	plane_t				plane_floor;
 	plane_t				plane_ceiling;
 
-	void		setGeometryUpdated();
-
 public:
 	// TODO maybe make this private, maybe
 	vector<extra_floor_t> extra_floors;
@@ -148,6 +146,7 @@ public:
 	rgba_t				getColour(int where = 0, bool fullbright = false);
 	rgba_t				getFogColour();
 	long				geometryUpdatedTime() { return geometry_updated; }
+	void				setGeometryUpdated();
 
 	void	connectSide(MapSide* side);
 	void	disconnectSide(MapSide* side);

@@ -4224,54 +4224,61 @@ void MapEditor::changeSectorHeight3d(int amount)
 			// Get sector
 			MapSector* sector = map.getSide(items[a].index)->getSector();
 
+			// TODO 3d floors -- should this still use this same logic, or move the entire floor...?
+
 			// Check this sector's ceiling hasn't already been changed
 			int index = sector->getIndex();
 			if (VECTOR_EXISTS(ceilings, index))
 				continue;
 
 			// Change height
-			int height = sector->intProperty("heightceiling");
-			sector->setIntProperty("heightceiling", height + amount);
+			sector->setCeilingHeight(sector->getCeilingHeight() + amount);
 
 			// Set to changed
 			ceilings.push_back(index);
 		}
 
-		// Floor
-		else if (items[a].type == SEL_FLOOR)
+		// Floor or ceiling
+		else if (items[a].type == SEL_FLOOR || items[a].type == SEL_CEILING)
 		{
+			bool floor = (items[a].type == SEL_FLOOR);
+
 			// Get sector
 			MapSector* sector = map.getSector(items[a].index);
 
-			// Change height
-			sector->setFloorHeight(sector->getFloorHeight() + amount);
-		}
-
-		// Ceiling
-		else if (items[a].type == SEL_CEILING)
-		{
-			// Get sector
-			MapSector* sector = map.getSector(items[a].index);
-
-			// Check this sector's ceiling hasn't already been changed
-			bool done = false;
-			int index = sector->getIndex();
-			for (unsigned b = 0; b < ceilings.size(); b++)
+			// If this is a 3D floor, change the control sector instead
+			int floor_idx = items[a].extra_floor_index;
+			if (floor_idx >= 0 && floor_idx < sector->extra_floors.size())
 			{
-				if (ceilings[b] == index)
+				MapSector* control_sector = map.getSector(
+					sector->extra_floors[floor_idx].control_sector_index);
+				if (control_sector)
 				{
-					done = true;
-					break;
+					sector = control_sector;
+					// Floor/ceiling are reversed in a 3D floor
+					floor = !floor;
 				}
 			}
-			if (done)
-				continue;
 
-			// Change height
-			sector->setCeilingHeight(sector->getCeilingHeight() + amount);
+			if (floor)
+			{
+				// Change height
+				sector->setFloorHeight(sector->getFloorHeight() + amount);
+			}
+			else
+			{
+				// Check this sector's ceiling hasn't already been changed
+				bool done = false;
+				int index = sector->getIndex();
+				if (VECTOR_EXISTS(ceilings, index))
+					continue;
 
-			// Set to changed
-			ceilings.push_back(sector->getIndex());
+				// Change height
+				sector->setCeilingHeight(sector->getCeilingHeight() + amount);
+
+				// Set to changed
+				ceilings.push_back(sector->getIndex());
+			}
 		}
 	}
 
