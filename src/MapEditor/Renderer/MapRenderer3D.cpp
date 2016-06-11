@@ -1693,6 +1693,21 @@ void MapRenderer3D::updateLine(unsigned index)
 				// A floor that's a flat plane can't possibly have any sides
 				continue;
 
+			// Don't draw a texture if the same 3D floor is on both sides
+			// TODO a bit clumsy and inefficient
+			// TODO unclear what happens if /different/ 3d floors are on both sides, or if the line itself also has a midtex, or if there's an EF_LO affecting the outside of the 3d floor...
+			bool shared = false;
+			for (unsigned b = 0; b < sides[1 - front]->getSector()->extra_floors.size(); b++)
+			{
+				if (sides[1 - front]->getSector()->extra_floors[b].control_sector_index == extra.control_sector_index)
+				{
+					shared = true;
+					break;
+				}
+			}
+			if (shared)
+				continue;
+
 			MapSector* control_sector = map->getSector(extra.control_sector_index);
 			MapLine* control_line = map->getLine(extra.control_line_index);
 
